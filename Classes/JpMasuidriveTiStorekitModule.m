@@ -8,6 +8,7 @@
 #import "TiBase.h"
 #import "TiHost.h"
 #import "TiUtils.h"
+#import "TiViewProxy.h"
 
 #import "Payment.h"
 #import "PaymentTransaction.h"
@@ -98,7 +99,8 @@
 - (void)productsRequest:(SKProductsRequest *)request
 	 didReceiveResponse:(SKProductsResponse *)response
 {
-	KrollCallback* callback = nil;
+  ListenerEntry *callback = nil;
+
 	for(NSArray* line in productRequestCallback) {
 		if([line objectAtIndex:0] == request) {
 			callback = [[[line objectAtIndex:1] retain] autorelease];
@@ -111,7 +113,13 @@
 		for(SKProduct* product in response.products) {
 			[products addObject:[[Product alloc] _initWithPageContext:[self pageContext] product:product]];
 		}
-		[callback call:[NSArray arrayWithObjects:products, response.invalidProductIdentifiers, nil] thisObject:self];
+    if(callback != nil && [callback context] != nil) {
+      NSMutableDictionary *eventObj = [NSMutableDictionary dictionary];
+      [eventObj setObject:products forKey:@"products"];
+      [eventObj setObject:response.invalidProductIdentifiers forKey:@"invalidProductIdentifiers"];
+
+      [self _fireEventToListener:@"receiveproducts" withObject:eventObj listener:[callback listener] thisObject:nil];
+    }
 	}
 }
 
@@ -149,16 +157,21 @@
 	
 	id callback = [args objectAtIndex:1];
 	ENSURE_TYPE(callback, KrollCallback);
+  ListenerEntry *entry = [[[ListenerEntry alloc] initWithListener:callback
+                                                          context:[self executionContext]
+                                                            proxy:self] autorelease];
+
 	SKProductsRequest *req = [[[SKProductsRequest alloc] initWithProductIdentifiers:productIds] autorelease];
 	req.delegate = self;
 	[req start];
-	[productRequestCallback addObject:[NSArray arrayWithObjects: req, callback, nil]];
+	[productRequestCallback addObject:[NSArray arrayWithObjects: req, entry, nil]];
 }
 
 -(id)defaultPaymentQueue
 {
-	if(defaultPaymentQueue==nil) {
-		defaultPaymentQueue = [[PaymentQueue alloc] _initWithPageContext:[self pageContext] queue:[SKPaymentQueue defaultQueue]];
+	if(defaultPaymentQueue == nil) {
+		defaultPaymentQueue = [[PaymentQueue alloc] _initWithPageContext:[self executionContext]
+                                                               queue:[SKPaymentQueue defaultQueue]];
 	}
 	return defaultPaymentQueue;
 }
