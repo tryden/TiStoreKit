@@ -51,5 +51,16 @@
 	return [[[[product priceLocale] localeIdentifier] retain] autorelease];
 }
 
+- (id)priceAsString
+{
+  NSNumberFormatter *formatter = [[NSNumberFormatter alloc] init];
+  [formatter setFormatterBehavior:NSNumberFormatterBehavior10_4];
+  [formatter setNumberStyle:NSNumberFormatterCurrencyStyle];
+  [formatter setLocale:[product priceLocale]];
+    
+  NSString *str = [formatter stringFromNumber:[product price]];
+  [formatter release];
+  return str;
+}
 
 @end
